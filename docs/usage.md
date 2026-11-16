@@ -25,7 +25,7 @@ uv tool update-shell
 
 `uv build` without `--wheel` first builds the sdist, and the wheel from it. `uv build --wheel` builds directly from the working tree and reuses a stale `build/lib`: the old runtime can end up in the distribution. If `build/` is left over from earlier builds, it is enough to delete it before such a check. From a tag without a clone: `uv tool install git+https://github.com/kaufd/witnessbox@v0.9.0`.
 
-The distribution adds one command, `witnessbox`, with the subcommands `gate`, `check`, `scaffold`, `sync-pinned`, `test-checks` and `spec`; the repository sources are not needed after installation. A built wheel can be transferred to the target machine and installed with the same `uv tool install dist/witnessbox-0.9.0-py3-none-any.whl`. `witnessbox --installation` shows the distribution, the version, the installation paths and the SHA-256 of the gate and checker code, as well as the path to the SDK resources. For calibration runs, run the project replay after an update.
+The distribution adds one command, `witnessbox`, with the subcommands `gate`, `check`, `scaffold`, `link-agents`, `sync-pinned`, `test-checks` and `spec`; the repository sources are not needed after installation. A built wheel can be transferred to the target machine and installed with the same `uv tool install dist/witnessbox-0.9.0-py3-none-any.whl`. `witnessbox --installation` shows the distribution, the version, the installation paths and the SHA-256 of the gate and checker code, as well as the path to the SDK resources. For calibration runs, run the project replay after an update.
 
 ## Moving from the old distribution
 
@@ -51,7 +51,7 @@ The installed distribution creates a check directory from templates:
 witnessbox scaffold <dart|ts|jvm|generic> [<directory>]
 ```
 
-`<directory>` defaults to `ebt` in the current directory; `.` fills the current empty directory. The command does not overwrite an existing non-empty directory. The stack chooses `test.sh` and `pinned.txt`; `generic` runs the command from `EBT_TEST_CMD`, and the spec and the example checker are shared. The files, the `test.sh` contract, `pinned.txt` and the order of actions are in the [scaffold](scaffold.md) page. The path to the first PASS is the [quick start](quickstart.md), and writing a spec is the [authoring guide](authoring.md). The scaffold `spec.toml` is an example, not an approved spec: a human approves the requirement (D4).
+`<directory>` defaults to `ebt` in the current directory; `.` fills the current empty directory. The command does not overwrite an existing non-empty directory. `witnessbox link-agents [<directory>]` points the root `AGENTS.md` and `CLAUDE.md` of the project to the new `AGENTS.md` (D69). The stack chooses `test.sh` and `pinned.txt`; `generic` runs the command from `EBT_TEST_CMD`, and the spec and the example checker are shared. The files, the `test.sh` contract, `pinned.txt` and the order of actions are in the [scaffold](scaffold.md) page. The path to the first PASS is the [quick start](quickstart.md), and writing a spec is the [authoring guide](authoring.md). The scaffold `spec.toml` is an example, not an approved spec: a human approves the requirement (D4).
 
 The files pinned in `pinned.txt` are copied into the project by the command `witnessbox sync-pinned <ebt directory>`, run from the project root; it parses `pinned.txt` the same way as the gate and does not write outside the project (D44).
 
@@ -151,7 +151,7 @@ An external consumer may rely on the left column; the right one changes without 
 
 | Supported interface | Internal implementation |
 |---|---|
-| the subcommands `witnessbox gate` (including `--check-only`), `witnessbox check`, `witnessbox scaffold`, `witnessbox sync-pinned`, `witnessbox test-checks`, `witnessbox spec`, `witnessbox --version`, `witnessbox --installation`, their arguments and exit codes | the organization of the package's Python modules; the internal `ebt_verification.checker.*`/`ebt_verification.cli` are not re-exported |
+| the subcommands `witnessbox gate` (including `--check-only`), `witnessbox check`, `witnessbox scaffold`, `witnessbox link-agents`, `witnessbox sync-pinned`, `witnessbox test-checks`, `witnessbox spec`, `witnessbox --version`, `witnessbox --installation`, their arguments and exit codes | the organization of the package's Python modules; the internal `ebt_verification.checker.*`/`ebt_verification.cli` are not re-exported |
 | `witnessbox.api`, the compatible `ebt_verification.api` and `from checkers import ...` | the functions of `checker/engine.py` and `checker/input.py` |
 | the formats of the JSONL evidence, `report.json` and `gate.json` | the structure of the checker registry |
 | the `test.sh`/`prepare.sh` contract, `OUT_DIR`, the variables `BASE`, `EBT_INV`, `EBT_TESTS`, `EBT_RUNNER`, `EBT_CHECK` | the gate's bash functions |

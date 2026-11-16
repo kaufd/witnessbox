@@ -125,7 +125,7 @@ For `-OBS`: the test acts through the observation boundary from the contract, re
 
 ## Stage 5. Checking the connection
 
-Make the rules reach every later agent, not only you: the scaffold put them in `ebt/AGENTS.md`. Add a pointer to it to the project's own agent instructions at the root (`AGENTS.md`, `CLAUDE.md`, Cursor rules: whatever the project uses; if there are none, create `AGENTS.md`), for example `Witnessbox rules for this project: ebt/AGENTS.md` (in `CLAUDE.md`, `@ebt/AGENTS.md` loads the file itself). Do not edit `ebt/AGENTS.md`.
+Make the rules reach every later agent, not only you: the scaffold put them in `ebt/AGENTS.md`. Run `witnessbox link-agents ebt`: it adds a pointer to it to `AGENTS.md` and `CLAUDE.md` at the project root (or creates `AGENTS.md` if there are none). If the project keeps agent instructions elsewhere (Cursor rules and the like), add the pointer there too, for example `Witnessbox rules for this project: ebt/AGENTS.md` (in `CLAUDE.md`, `@ebt/AGENTS.md` loads the file itself). Do not edit `ebt/AGENTS.md`.
 
 Commit the connection in one commit (the spec is already approved): `ebt/`, the SDK copy, the evidence tests, the lock file, the pointer to the agent rules. `build/` goes in `.gitignore`.
 
