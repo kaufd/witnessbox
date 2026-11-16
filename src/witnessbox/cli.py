@@ -78,7 +78,7 @@ def installation():
 
 
 GATE_FILES = ("gate.md", "report.md", "report.json", "evidence.jsonl", "out",
-              "test.log", "prepare.log", "ebt-check.err", "installation.json", "inputs", "spec.html")
+              "test.log", "prepare.log", "ebt-check.err", "installation.json", "inputs", "spec.html", "gate.html")
 
 
 def write_summary(run, exit_code, reasons, message, commit, tests_rc, check_rc,

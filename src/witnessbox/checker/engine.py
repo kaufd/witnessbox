@@ -74,6 +74,8 @@ class Report:
     # Paths of checker weak spots (`field`, `field[i]`, `field.key`); for a scalar field the path
     # equals the field name (D43).
     weak_required: dict[str, list[str]] = field(default_factory=dict)
+    # One proving record per partition: {inv: {partition: {"line", "scope", "data"}}} (D65).
+    partition_examples: dict[str, dict[str, dict]] = field(default_factory=dict)
 
     def count(self, kind: str) -> int:
         return sum(1 for f in self.findings if f.kind == kind)
@@ -151,9 +153,10 @@ def run_checker(inv: dict, witness: dict) -> Verdict:
 
 
 def check_record(n: int, rec: dict, spec: dict, hits: dict[str, set[str]],
-                 seen: set[str]) -> Finding | None:
+                 seen: set[str], examples: dict[str, dict[str, dict]] | None = None) -> Finding | None:
     """hits: partitions by records that prove the invariant: a record with a finding
-    (including one known from known.toml) gives no coverage (D11, D15)."""
+    (including one known from known.toml) gives no coverage (D11, D15).
+    examples: the first such record per partition, for the verdict page (D65)."""
     inv_id, scope, seq = rec.get("inv"), rec.get("scope"), rec.get("seq")
     base = dict(line=n, scope=scope, seq=seq, inv=inv_id, req=rec.get("req"),
                 claim=rec.get("ok"), witness=rec.get("data"))
@@ -186,6 +189,9 @@ def check_record(n: int, rec: dict, spec: dict, hits: dict[str, set[str]],
     claim = rec.get("ok")
     if claim is True and v.ok:
         hits.setdefault(inv_id, set()).update(v.parts)
+        if examples is not None:
+            for part in sorted(v.parts):  # a set: sorted keeps report.json byte-stable
+                examples.setdefault(inv_id, {}).setdefault(part, {"line": n, "scope": scope, "data": w})
         return None
     if claim is True and not v.ok:
         return Finding(FALSE_PROOF, verdict=False, reason=v.reason, **base)
@@ -452,7 +458,7 @@ def build_report(spec: dict, sha: str, records, bad_lines, baseline, limit: int,
     hits: dict[str, set[str]] = {}
     seen: set[str] = set()
     for n, rec in records:
-        f = check_record(n, rec, spec, hits, seen)
+        f = check_record(n, rec, spec, hits, seen, r.partition_examples)
         if f:
             r.findings.append(f)
     if known is not None:

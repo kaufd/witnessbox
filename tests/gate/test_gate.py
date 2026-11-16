@@ -328,10 +328,15 @@ class Gate(unittest.TestCase):
         self.assertRegex(s["checker"]["sha256"], "^[0-9a-f]{64}$")
         self.assertRegex(s["spec_sha256"], "^[0-9a-f]{64}$")
         self.assertLessEqual({"gate.md", "report.md", "report.json", "evidence.jsonl", "out",
-                              "test.log", "installation.json", "inputs", "spec.html"}, set(s["files"]))
+                              "test.log", "installation.json", "inputs", "spec.html", "gate.html"}, set(s["files"]))
         # The review page of the checked spec copy carries the same sha256 as gate.json (D58).
         self.assertIn(s["spec_sha256"][12:], (self.run_dir / "spec.html").read_text(encoding="utf-8"))
         self.assertIn("page: [spec.html](spec.html)", self.gate_md())
+        # The verdict page lays the run over the same spec (D65).
+        verdict_page = (self.run_dir / "gate.html").read_text(encoding="utf-8")
+        self.assertIn(s["spec_sha256"][12:], verdict_page)
+        self.assertIn('<span class="value">PASS</span>', verdict_page)
+        self.assertIn("Verdict page: [gate.html](gate.html)", self.gate_md())
         import hashlib
         out = self.run_dir / "out"
         self.assertEqual(s["evidence"], [{"file": "a.jsonl",
@@ -345,6 +350,9 @@ class Gate(unittest.TestCase):
         s = self.gate_json()
         self.assertEqual((s["result"], s["reasons"], s["tests_exit_code"], s["checker_exit_code"]),
                          ("FAIL", ["tests_failed"], 1, 0))
+        verdict_page = (self.run_dir / "gate.html").read_text(encoding="utf-8")
+        self.assertIn('<span class="value">FAIL</span>', verdict_page)
+        self.assertIn("Reasons: tests_failed", verdict_page)
         self.assertEqual([e["file"] for e in s["evidence"]], ["a.jsonl"])
 
         (self.ebt / "spec.toml").unlink()
@@ -367,6 +375,27 @@ class Gate(unittest.TestCase):
         self.assertFalse((self.run_dir / "spec.html").exists())
         self.assertNotIn("spec.html", self.gate_json()["files"])
         self.assertIn("page: not built: spec.toml does not parse", self.gate_md())
+        self.assertFalse((self.run_dir / "gate.html").exists())
+        self.assertNotIn("gate.html", self.gate_json()["files"])
+        self.assertIn("Verdict page: not built", self.gate_md())
+
+    def test_gate_error_after_the_verdict_page_removes_it(self):
+        """A gate error after gate.html is written must not leave a PASS page next to an ERROR gate.json."""
+        p = self.gate(self.write_to('"$OUT_DIR"') + 'mkdir "$OUT_DIR/../gate.md"\n')
+        self.assertEqual(p.returncode, 2, p.stdout + p.stderr)
+        self.assertEqual(self.gate_json()["result"], "ERROR")
+        self.assertFalse((self.run_dir / "gate.html").exists())
+        self.assertNotIn("gate.html", self.gate_json()["files"])
+
+    def test_gate_without_verdict_page_when_report_is_missing(self):
+        """A checker that crashes writes no report.json: no verdict page, the verdict stays ERROR (D65)."""
+        (self.ebt / "checks.py").write_text("raise SystemExit(3)\n", encoding="utf-8")
+        p = self.gate(self.write_to('"$OUT_DIR"'))
+        self.assertEqual(p.returncode, 2, p.stdout + p.stderr)
+        self.assertEqual(self.gate_json()["reasons"], ["checker_error"])
+        self.assertFalse((self.run_dir / "report.json").exists())
+        self.assertFalse((self.run_dir / "gate.html").exists())
+        self.assertIn("Verdict page: not built", self.gate_md())
 
     def test_gate_json_evidence_lists_regular_files_sorted(self):
         """evidence lists the regular out/*.jsonl files by name."""
@@ -740,6 +769,10 @@ class Gate(unittest.TestCase):
                 # does not see the witnessbox package.
                 for name in ("test_checks.py", "README.md", "AGENTS.md"):
                     self.assertIn("witnessbox test-checks", (target / name).read_text(encoding="utf-8"))
+                # The agent rules ask for evidence in a pull request (D66) and a second-path search (D67).
+                rules = (target / "AGENTS.md").read_text(encoding="utf-8")
+                for text in ("## Evidence", "Not verified", "second path without evidence"):
+                    self.assertIn(text, rules)
                 p = subprocess.run([str(self.bin / "witnessbox"), "test-checks", target.name],
                                    cwd=target.parent, capture_output=True, text=True,
                                    env={**env, "PATH": f"{self.bin}:{os.environ['PATH']}"})

@@ -81,7 +81,7 @@ Gate exit codes: `0` is PASS, `1` is FAIL, `2` is ERROR. Execution errors take p
 | `tests_exit_code`, `checker_exit_code` | the stage codes; `null` if the stage did not run |
 | `spec_sha256`, `verifier`, `checker` | the spec hash, the distribution (`distribution`, `version`, `gate_sha256`) and the checker (`command`, `sha256`) |
 | `evidence` | the evidence files the checker read: `{file, sha256}` per `out/*.jsonl`, by name; `null` if the checker did not run |
-| `files` | the names of existing results in the results directory: `gate.md`, `report.json`, `evidence.jsonl`, `out`, `inputs` (the inputs the checker read), `spec.html` (the review page of the checked spec), etc. | The results directory is reused, with the outputs of the previous attempt cleared, so do not run parallel attempts into one checkout or results directory. |
+| `files` | the names of existing results in the results directory: `gate.md`, `report.json`, `evidence.jsonl`, `out`, `inputs` (the inputs the checker read), `spec.html` (the review page of the checked spec), `gate.html` (the verdict page), etc. | The results directory is reused, with the outputs of the previous attempt cleared, so do not run parallel attempts into one checkout or results directory. |
 
 `test.sh` runs from the checkout: the words from `EBT_TESTS` are passed to it as arguments, and the absolute empty `OUT_DIR` as an environment variable. The script writes separate `OUT_DIR/*.jsonl` files, each with its own seq: code `0` means the tests succeeded, `1` means the tests that ran ended unsuccessfully, other codes mean an execution error. The gate checks the available evidence on a non-zero test code too. If the script created no evidence, the gate may pick up fresh `build/ebt/*.jsonl`; the directory is cleared before the run.
 
@@ -130,6 +130,17 @@ The full `sha256` is also printed to stdout. Codes: `0` the page is written, `2`
 parse or the arguments are wrong. The gate writes the same page for the checked copy of the spec to
 `spec.html` in the results directory and links it from `gate.md`.
 
+After the checker the gate also writes the verdict page `gate.html` (D65): the same spec page with the
+run laid over it. It shows the result and `reasons`, the status of every invariant (a finding, out of
+scope, never fired, uncovered partitions, confirmed), for every covered partition one example — the
+`data` of the first record without a finding that covered it, truncated as in `report.md` — and the
+partitions that were not covered. A requirement whose invariants are all at the decision level is
+marked "no -OBS". Findings whose invariant is not in the spec get their own section, and a "Not
+verified" section lists requirements without `-OBS`, invariants out of scope and findings forgiven by
+`known.toml`. Without a valid `report.json` (the checker failed) the page is not written and `gate.md`
+says so; the verdict does not depend on the page. In CI `gate.md` stays the main report: GitHub does
+not display HTML from artifacts.
+
 ## Imports in project checkers
 
 Installed project checkers import the public types from `witnessbox.api`; `PYTHONPATH` and an editable install are not required. The compatible `ebt_verification.api` re-exports the same objects and contains no second implementation, and `from checkers import ...` remains a historical import. A developer's tests may separately import the sources from the development tree.
@@ -146,4 +157,4 @@ An external consumer may rely on the left column; the right one changes without 
 | the `test.sh`/`prepare.sh` contract, `OUT_DIR`, the variables `BASE`, `EBT_INV`, `EBT_TESTS`, `EBT_RUNNER`, `EBT_CHECK` | the gate's bash functions |
 | the SDKs from the `resources` field of the `witnessbox --installation` command, their format and allowed values ([sdk](sdk.md)) | the physical location of the sources |
 
-`gate.md`, `report.md` and `spec.html` are meant for humans; their text is not parsed by programs. New JSON fields and new `reasons` values are a compatible change, and a consumer ignores what it does not know. Removing or renaming a field, or changing the meaning of an exit code or of the `test.sh` contract, is incompatible: before version 1.0 such changes raise the minor version, are recorded in the [decisions](decisions.md) and change the `format` of the affected JSON. Adding the public import `witnessbox.api` while keeping the old `ebt_verification.api` is a compatible change, hence version `0.5.0` and not a patch. Fixes without an interface change raise the patch version. The boundaries are pinned by tests of the installed wheel in `tests/gate/test_gate.py`.
+`gate.md`, `report.md`, `spec.html` and `gate.html` are meant for humans; their text is not parsed by programs. New JSON fields and new `reasons` values are a compatible change, and a consumer ignores what it does not know. Removing or renaming a field, or changing the meaning of an exit code or of the `test.sh` contract, is incompatible: before version 1.0 such changes raise the minor version, are recorded in the [decisions](decisions.md) and change the `format` of the affected JSON. Adding the public import `witnessbox.api` while keeping the old `ebt_verification.api` is a compatible change, hence version `0.5.0` and not a patch. Fixes without an interface change raise the patch version. The boundaries are pinned by tests of the installed wheel in `tests/gate/test_gate.py`.

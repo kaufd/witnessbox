@@ -30,8 +30,17 @@ apply to every agent that changes this repository, not only inside `ebt/`.
    code or an error in the specification; the human decides which. Report the invariant and the
    finding from `report.md`; fix the code only if the task asks for it, and never fix the
    specification yourself. No evidence is ERROR, not success.
+   When the human confirms a finding as a code defect, look for other places that make the same
+   decision (the same rule constants, the same calculation, other callers) and report for each
+   whether it records `ev()` or is covered by `-OBS`. A place with neither is a
+   "second path without evidence" finding. Do not change `ebt/` or the evidence tests to cover it.
 7. **Dart:** call `ev()` only inside `assert`, express money as whole minor units, and do not
    claim the code is verified until `flutter analyze` and the tests pass.
+8. **A pull request carries its evidence.** Its description has an `## Evidence` section: the
+   gate exit code and `reasons` on the branch head, the invariants the change touches, the
+   findings from `report.md` if any, and a "Not verified" list: decisions without `ev()`,
+   outcomes without `-OBS`, input classes missing from `partitions`. If you did not run the gate,
+   say so and why.
 
 ## Commands
 

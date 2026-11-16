@@ -9,7 +9,7 @@ set -uo pipefail
 mkdir -p "$3" && run=$(cd "$3" && pwd) || exit 2
 # The result of a previous attempt in the same folder must not survive an early exit of this one.
 out="$run/out"
-rm -rf "$out" "$run/inputs" && rm -f "$run"/{gate.md,gate.json,report.md,report.json,evidence.jsonl,test.log,prepare.log,ebt-check.err,installation.json,spec.html} \
+rm -rf "$out" "$run/inputs" && rm -f "$run"/{gate.md,gate.json,report.md,report.json,evidence.jsonl,test.log,prepare.log,ebt-check.err,installation.json,spec.html,gate.html} \
   || { echo "could not clear the results of the previous attempt in $run" >&2; exit 2; }
 py=${EBT_VERIFICATION_PYTHON:-}
 [ -n "$py" ] || { echo "run the installed command witnessbox gate" >&2; exit 2; }
@@ -24,6 +24,8 @@ summary() {
 fail() {
   error_message="$*"
   echo "$*" >&2
+  # A verdict page written before the error would contradict gate.json (D65).
+  [ -n "${run:-}" ] && rm -f "$run/gate.html" "$run/gate.html.tmp"
   summary 2 gate_error "$*" || rm -f "$run/gate.json"
   exit 2
 }
@@ -246,6 +248,13 @@ write_report() {
   "$py" -I -c 'import sys; from witnessbox.spec_page import write_page; write_page(*sys.argv[1:])' \
     "$spec_file" "$run/spec.html" "$ebt/spec.toml" 2>/dev/null \
     || { rm -f "$run/spec.html"; spec_page="not built: spec.toml does not parse"; }
+  # The verdict page (D65): the same spec with report.json laid over it. Without a valid report.json
+  # (the checker failed) there is no page; it never changes the verdict.
+  case $rc in 0) result=PASS ;; 1) result=FAIL ;; *) result=ERROR ;; esac
+  gate_page="[gate.html](gate.html)"
+  "$py" -I -c 'import sys; from witnessbox.spec_page import write_gate_page; write_gate_page(*sys.argv[1:])' \
+    "$spec_file" "$run/report.json" "$run/gate.html" "$ebt/spec.toml" "$result" "$reasons" 2>/dev/null \
+    || { rm -f "$run/gate.html" "$run/gate.html.tmp"; gate_page="not built: no valid report.json or spec.toml"; }
   if [ "$runner_kind" = test.sh ]; then
     runner_hash=$(shasum -a 256 "$ebt/test.sh") || fail "could not hash test.sh"
     runner_environment="test.sh sha256 ${runner_hash:0:12}"
@@ -264,6 +273,7 @@ write_report() {
 - Coverage required for: ${EBT_INV:-all spec invariants}
 - Environment: $runner_environment; $python_version
 - Report: [report.md](report.md)
+- Verdict page: $gate_page
 EOF
 ) || fail "could not build gate.md"
   [ -n "$runner_error" ] && report+=$'\n'"- **Test execution error:** code $test_rc (contract: 0 passed, 1 failed), see test.log"
