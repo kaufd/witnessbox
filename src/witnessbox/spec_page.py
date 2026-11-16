@@ -1,14 +1,22 @@
 """A self-contained HTML page of spec.toml for a human to review and approve (D58).
 
 The page shows the requirements, their invariants and the sha256 of the exact file, so an approval
-names one version of the spec. It is a view only: the gate and the checker do not read it.
+names one version of the spec. With a run result laid over it, the same page is the gate's verdict
+page gate.html (D65). It is a view only: the gate and the checker do not read it.
 """
 
 import hashlib
+import json
 from html import escape
 from pathlib import Path
 
 from witnessbox.checker.input import load_spec
+from witnessbox.checker.rendering import _short
+
+# Findings shown per invariant on the verdict page; the rest are in report.md.
+MAX_FINDINGS = 5
+LIMITS = ("The gate does not see decisions without ev() or outcomes without an observation scenario; "
+          "see docs/security.md.")
 
 CSS = """
 /* Layout: one reading column; each requirement is a section, its invariants are bordered panels inside it. */
@@ -103,6 +111,21 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
 }
 """
 
+# Only the verdict page uses these rules, so the spec page stays byte-for-byte the same.
+RUN_CSS = """
+.verdict { display: grid; gap: 6px; padding: 12px 14px; border-radius: 6px; border: 1px solid var(--warn);
+  background: var(--warn-soft); }
+.verdict.pass { border-color: var(--accent); background: var(--accent-soft); }
+.verdict .value { font-family: var(--font-mono); font-size: 20px; font-weight: 650; }
+.verdict a { color: inherit; }
+.status { display: inline-block; padding: 1px 8px; border-radius: 3px; font-size: 12px; font-weight: 600;
+  color: var(--warn); background: var(--warn-soft); }
+.status.confirmed { color: var(--accent); background: var(--accent-soft); }
+.items { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 14px; }
+.items code { overflow-wrap: anywhere; }
+.run-section { display: grid; gap: 12px; padding-top: 24px; border-top: 2px solid var(--ink); }
+"""
+
 
 def _chips(items: list[str], cls: str = "") -> str:
     return f'<ul class="chips {cls}">' + "".join(f"<li>{escape(i)}</li>" for i in items) + "</ul>"
@@ -112,7 +135,81 @@ def _flag(text: str) -> str:
     return f'<span class="flag">{escape(text)}</span>'
 
 
-def _invariant(inv_id: str, inv: dict) -> str:
+def _inv_status(inv_id: str, report: dict) -> str:
+    """The first that applies: a finding, out of scope, never fired, uncovered partitions, confirmed."""
+    if any(f.get("inv") == inv_id for f in report.get("findings", [])):
+        return "finding"
+    scope = report.get("coverage_scope")
+    if scope is not None and inv_id not in scope:
+        return "out of scope"
+    if inv_id in report.get("inv_never_fired", []):
+        return "never fired"
+    if inv_id in report.get("uncovered_partitions", {}):
+        return "uncovered"
+    return "confirmed"
+
+
+def _items(items: list[str]) -> str:
+    return f'<ul class="items">{"".join(f"<li>{i}</li>" for i in items)}</ul>'
+
+
+def _finding(f: dict) -> str:
+    where = f"line {f.get('line')}" if f.get("line") else "log"
+    return f'<code>{escape(str(f.get("kind")))}</code> {escape(where)}: {escape(str(f.get("reason", "")))}'
+
+
+def _run_rows(inv_id: str, report: dict) -> list[tuple[str, str]]:
+    status = _inv_status(inv_id, report)
+    rows = [("Status", f'<span class="status {status.replace(" ", "-")}">{escape(status)}</span>')]
+    findings = [f for f in report.get("findings", []) if f.get("inv") == inv_id]
+    if findings:
+        shown = [_finding(f) for f in findings[:MAX_FINDINGS]]
+        if len(findings) > MAX_FINDINGS:
+            shown.append(f"and {len(findings) - MAX_FINDINGS} more in report.md")
+        rows.append(("Findings", _items(shown)))
+    if status in ("out of scope", "never fired"):
+        return rows
+    examples = report.get("partition_examples", {}).get(inv_id, {})
+    parts = [f'<code>{escape(part)}</code> <span class="note">line {escape(str(ex.get("line")))}</span> '
+             f'<code>{escape(_short(ex.get("data")))}</code>' for part, ex in examples.items()]
+    parts += [f'<code>{escape(part)}</code> {_flag("not covered")}'
+              for part in report.get("uncovered_partitions", {}).get(inv_id, [])]
+    if parts:
+        rows.append(("In this run", _items(parts)))
+    return rows
+
+
+def _no_obs(inv_ids: list[str]) -> bool:
+    return bool(inv_ids) and not any(i.endswith("-OBS") for i in inv_ids)
+
+
+def _run_sections(spec: dict, by_req: dict[str, list[str]], report: dict) -> str:
+    outside = [_finding(f) + f' · <code>{escape(str(f.get("inv") or "—"))}</code>'
+               for f in report.get("findings", []) if f.get("inv") not in spec["inv"]]
+    scope = report.get("coverage_scope")
+    out_of_scope = [] if scope is None else [i for i in spec["inv"] if i not in scope]
+    no_obs = [r for r, ids in by_req.items() if _no_obs(ids)]
+    known = [f'<code>{escape(str(f.get("inv")))}</code> ' + _finding(f) for f in report.get("known_findings", [])]
+
+    def listed(title: str, items: list[str]) -> str:
+        return f'<h3>{escape(title)}</h3>' + (_items(items) if items else '<p class="note">none</p>')
+
+    sections = []
+    if outside:
+        sections.append('<section class="run-section" id="outside-spec"><h2>Findings outside the spec</h2>'
+                        '<p class="note">Records whose invariant is not in spec.toml or that are not tied to one.</p>'
+                        f"{_items(outside)}</section>")
+    sections.append(
+        '<section class="run-section" id="not-verified"><h2>Not verified</h2>'
+        '<p class="note">This list does not change the verdict.</p>'
+        + listed("Requirements without -OBS", [f"<code>{escape(r)}</code>" for r in no_obs])
+        + listed("Invariants out of scope", [f"<code>{escape(i)}</code>" for i in out_of_scope])
+        + listed("Findings forgiven by known.toml", known)
+        + f'<p>{escape(LIMITS)}</p></section>')
+    return "".join(sections)
+
+
+def _invariant(inv_id: str, inv: dict, report: dict | None = None) -> str:
     rows = [("Checker", f'<code>{escape(inv["checker"])}</code>'),
             ("Witness", _chips(inv["witness"], "witness"))]
     if inv.get("transitions"):
@@ -128,6 +225,8 @@ def _invariant(inv_id: str, inv: dict) -> str:
         rows.append(("Partitions", _flag("none")))
     if inv.get("not_in_verdict"):
         rows.append(("Not in verdict", _chips(inv["not_in_verdict"])))
+    if report is not None:
+        rows.extend(_run_rows(inv_id, report))
     statement = inv.get("statement")
     statement_html = f'<p class="statement">{escape(statement)}</p>' if statement else f"<p>{_flag('no statement')}</p>"
     rows_html = "".join(f'<dt class="label">{k}</dt><dd>{v}</dd>' for k, v in rows)
@@ -136,8 +235,11 @@ def _invariant(inv_id: str, inv: dict) -> str:
             f'{statement_html}<dl class="rows">{rows_html}</dl></article>')
 
 
-def render(spec: dict, raw: bytes, shown_path: str) -> str:
-    """The page for a spec already validated by load_spec; raw is the file bytes the hash is taken from."""
+def render(spec: dict, raw: bytes, shown_path: str, run: dict | None = None) -> str:
+    """The page for a spec already validated by load_spec; raw is the file bytes the hash is taken from.
+    run = {"report": parsed report.json, "result": "PASS" | "FAIL" | "ERROR", "reasons": [...]} lays
+    the run result over the spec: the gate's verdict page (D65). Without run the page is unchanged."""
+    report = run["report"] if run is not None else None
     sha = hashlib.sha256(raw).hexdigest()
     reqs, invs = spec["req"], spec["inv"]
     by_req: dict[str, list[str]] = {req_id: [] for req_id in reqs}
@@ -155,18 +257,31 @@ def render(spec: dict, raw: bytes, shown_path: str) -> str:
     for req_id, req in reqs.items():
         source = req.get("source")
         source_html = escape(" ".join(str(source).split())) if source else _flag("not given")
-        invariants = "".join(_invariant(i, invs[i]) for i in by_req[req_id]) or (
+        invariants = "".join(_invariant(i, invs[i], report) for i in by_req[req_id]) or (
             f'<p>{_flag("no invariants")} <span class="note">The gate does not check this requirement.</span></p>')
         sections.append(
             f'<section class="req" id="{escape(req_id)}"><div class="req-head">'
             f'<h2 class="mono">{escape(req_id)}</h2><span class="label">Requirement</span></div>'
             f'<p class="req-text">{escape(" ".join(str(req.get("text", "")).split()))}</p>'
             f'<div class="source"><span class="label">Source</span><span>{source_html}</span></div>'
-            f"{invariants}</section>")
+            + (f"<p>{_flag('no -OBS')} <span class=\"note\">Only the decision level checks this requirement.</span></p>"
+               if report is not None and _no_obs(by_req[req_id]) else "")
+            + f"{invariants}</section>")
 
     path = Path(shown_path)
     project = path.parent.parent.name if path.parent.name == "ebt" else path.parent.name
-    title = f"{project} EBT spec" if project else "EBT spec"
+    kind = "EBT verdict" if run is not None else "EBT spec"
+    title = f"{project} {kind}" if project else kind
+    verdict_html, run_html, css = "", "", CSS
+    if run is not None:
+        result = str(run["result"])
+        reasons = ", ".join(run["reasons"]) or "none"
+        verdict_html = (f'<div class="verdict{" pass" if result == "PASS" else ""}"><span class="label">Gate result</span>'
+                        f'<span class="value">{escape(result)}</span><span>Reasons: {escape(reasons)}</span>'
+                        '<span><a href="gate.md">gate.md</a> · <a href="report.md">report.md</a> · '
+                        '<a href="spec.html">spec.html</a></span></div>')
+        run_html = _run_sections(spec, by_req, report)
+        css = CSS + RUN_CSS
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -174,25 +289,40 @@ def render(spec: dict, raw: bytes, shown_path: str) -> str:
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="claude:viewport-fit-sides" content="cover">
 <title>{escape(title)}</title>
-<style>{CSS}</style>
+<style>{css}</style>
 </head>
 <body>
 <div class="page">
 <header>
   <div class="file">{escape(shown_path)}</div>
   <h1>{escape(title)}</h1>
-  <div class="facts">{facts_html}</div>
+  {verdict_html}<div class="facts">{facts_html}</div>
   <div class="hash"><span class="label">spec.toml sha256 · an approval names exactly this file</span>
     <span class="value"><b>{sha[:12]}</b>{sha[12:]}</span></div>
   <nav aria-label="Requirements"><ol>{nav}</ol></nav>
 </header>
-{"".join(sections)}
+{"".join(sections)}{run_html}
 <footer>Built from {escape(shown_path)}. The gate and the checker report print the first 12 characters
 of this hash. Any edit of the file changes the hash, and the spec has to be approved again.</footer>
 </div>
 </body>
 </html>
 """
+
+
+def write_gate_page(spec_path, report_path, out_path, shown_path, result: str, reasons: str) -> None:
+    """The verdict page gate.html (D65): the checked spec with report.json laid over it.
+    reasons is the gate's comma-separated list. Raises on a bad spec or report; then out_path is not written."""
+    spec_path, out_path = Path(spec_path), Path(out_path)
+    spec, _ = load_spec(spec_path)
+    report = json.loads(Path(report_path).read_text(encoding="utf-8"))
+    if not isinstance(report, dict):
+        raise ValueError("report.json is not a JSON object")
+    run = {"report": report, "result": result, "reasons": [r for r in reasons.split(",") if r]}
+    html = render(spec, spec_path.read_bytes(), str(shown_path), run)
+    tmp = out_path.with_name(out_path.name + ".tmp")
+    tmp.write_text(html, encoding="utf-8")
+    tmp.replace(out_path)
 
 
 def write_page(spec_path, out_path, shown_path=None) -> str:

@@ -945,5 +945,97 @@ class HostileEvidence(unittest.TestCase):
                     self.assertNotIn("Traceback", err.getvalue())
 
 
+class GatePage(unittest.TestCase):
+    """The verdict page: the spec page with the run result laid over it (D65)."""
+
+    def setUp(self):
+        from witnessbox import spec_page
+        self.page = spec_page
+        self.spec, _ = ec.load_spec(SPEC)
+        self.raw = SPEC.read_bytes()
+        self.report = json.loads((KIT / "examples" / "basic" / "report.json").read_text(encoding="utf-8"))
+
+    def render(self, result="FAIL", reasons=("checker_failed",)):
+        run = {"report": self.report, "result": result, "reasons": list(reasons)}
+        return self.page.render(self.spec, self.raw, "ebt/spec.toml", run)
+
+    @staticmethod
+    def block(html, anchor, end):
+        start = html.index(anchor)
+        return html[start:html.index(end, start)]
+
+    def test_spec_page_unchanged_without_run(self):
+        plain = self.page.render(self.spec, self.raw, "ebt/spec.toml")
+        self.assertEqual(plain, self.page.render(self.spec, self.raw, "ebt/spec.toml", None))
+        self.assertNotIn("EBT verdict", plain)
+
+    def test_gate_page_shows_example_defects(self):
+        html = self.render()
+        self.assertIn("EBT verdict", html)
+        self.assertIn("checker_failed", html)
+        self.assertIn("FALSE_PROOF", self.block(html, 'id="INV-CART-3"', "</article>"))
+        self.assertIn("WITNESS_INCOMPLETE", self.block(html, 'id="INV-CART-3"', "</article>"))
+        self.assertIn("FALSE_PROOF", self.block(html, 'id="INV-SYNC-1"', "</article>"))
+        machine = self.block(html, 'id="SM-CHECKOUT"', "</article>")
+        self.assertIn("confirmed --edit--&gt; cart", machine)
+        self.assertIn("not covered", machine)
+        self.assertIn("line ", self.block(html, 'id="INV-CART-3"', "</article>"))
+
+    def test_gate_page_shows_findings_outside_spec(self):
+        outside = self.block(self.render(), 'id="outside-spec"', "</section>")
+        self.assertIn("INV-CART-9", outside)
+        self.assertIn("UNKNOWN_INV", outside)
+
+    def test_gate_page_escapes_example_data(self):
+        self.report["partition_examples"]["INV-CART-3"]["no_discount"]["data"] = {"name": "<script>x</script>"}
+        html = self.render()
+        self.assertNotIn("<script>", html)
+        self.assertIn("&lt;script&gt;", html)
+
+    def test_gate_page_truncates_example(self):
+        self.report["partition_examples"]["INV-CART-3"]["no_discount"]["data"] = {"lines": list(range(5000))}
+        html = self.render()
+        self.assertNotIn("4999", html)
+        self.assertIn("…", self.block(html, 'id="INV-CART-3"', "</article>"))
+
+    def test_gate_page_marks_out_of_scope(self):
+        self.report["coverage_scope"] = ["INV-CART-3"]
+        html = self.render()
+        machine = self.block(html, 'id="SM-CHECKOUT"', "</article>")
+        self.assertIn("out of scope", machine)
+        self.assertNotIn("not covered", machine)
+        self.assertIn("SM-CHECKOUT", self.block(html, 'id="not-verified"', "</section>"))
+
+    def test_gate_page_lists_known_and_no_obs(self):
+        known = next(f for f in self.report["findings"] if f["inv"] == "INV-CART-3" and f["kind"] == "FALSE_PROOF")
+        self.report["known_findings"] = [known]
+        html = self.render()
+        not_verified = self.block(html, 'id="not-verified"', "</section>")
+        self.assertIn("INV-CART-3", not_verified)
+        self.assertIn("FALSE_PROOF", not_verified)
+        self.assertIn("no -OBS", self.block(html, 'id="REQ-CART-1"', "<article"))
+
+    def test_write_gate_page_rejects_bad_report(self):
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d) / "gate.html"
+            for name, text in {"not json": "not json", "not an object": "[]"}.items():
+                with self.subTest(name):
+                    report = Path(d) / "report.json"
+                    report.write_text(text, encoding="utf-8")
+                    with self.assertRaises(ValueError):
+                        self.page.write_gate_page(SPEC, report, out, "ebt/spec.toml", "FAIL", ",checker_failed")
+                    self.assertFalse(out.exists())
+                    self.assertEqual(list(Path(d).glob("gate.html*")), [])
+
+    def test_write_gate_page_writes_result_and_reasons(self):
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d) / "gate.html"
+            self.page.write_gate_page(SPEC, KIT / "examples" / "basic" / "report.json", out, "ebt/spec.toml",
+                                      "FAIL", ",checker_failed,tests_failed")
+            html = out.read_text(encoding="utf-8")
+            self.assertIn("checker_failed", html)
+            self.assertIn("tests_failed", html)
+
+
 if __name__ == "__main__":
     unittest.main()
