@@ -1025,6 +1025,25 @@ class GatePage(unittest.TestCase):
         self.assertIn("FALSE_PROOF", not_verified)
         self.assertIn("no -OBS", self.block(html, 'id="REQ-CART-1"', "<article"))
 
+    def test_gate_page_marks_weak_checker(self):
+        # A weak checker fails the run (Report.failed), so the page must not call it confirmed.
+        del self.report["uncovered_partitions"]["SM-CHECKOUT"]
+        self.report["weak_required"] = {"SM-CHECKOUT": ["event"]}
+        machine = self.block(self.render(), 'id="SM-CHECKOUT"', "</article>")
+        self.assertIn('class="status weak-checker"', machine)
+        self.assertIn("<code>event</code>", machine)
+        self.assertNotIn('class="status confirmed"', machine)
+
+    def test_gate_page_req_without_invariants_fails_coverage(self):
+        profile = self.block(self.render(), 'id="REQ-PROFILE-1"', "</section>")
+        self.assertIn("fails coverage", profile)
+        self.assertNotIn("The gate does not check this requirement", profile)
+
+    def test_gate_page_lists_vanished_baseline_pairs(self):
+        self.report["baseline"]["vanished"] = ["checkout_flow / SM-CHECKOUT"]
+        vanished = self.block(self.render(), 'id="vanished"', "</section>")
+        self.assertIn("checkout_flow / SM-CHECKOUT", vanished)
+
     def test_write_gate_page_rejects_bad_report(self):
         with tempfile.TemporaryDirectory() as d:
             out = Path(d) / "gate.html"

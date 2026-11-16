@@ -136,9 +136,12 @@ def _flag(text: str) -> str:
 
 
 def _inv_status(inv_id: str, report: dict) -> str:
-    """The first that applies: a finding, out of scope, never fired, uncovered partitions, confirmed."""
+    """The first that applies: a finding, a weak checker, out of scope, never fired, uncovered partitions,
+    confirmed. A weak checker fails the run like a finding (Report.failed), so it is never "confirmed"."""
     if any(f.get("inv") == inv_id for f in report.get("findings", [])):
         return "finding"
+    if inv_id in report.get("weak_required", {}):
+        return "weak checker"
     scope = report.get("coverage_scope")
     if scope is not None and inv_id not in scope:
         return "out of scope"
@@ -167,6 +170,10 @@ def _run_rows(inv_id: str, report: dict) -> list[tuple[str, str]]:
         if len(findings) > MAX_FINDINGS:
             shown.append(f"and {len(findings) - MAX_FINDINGS} more in report.md")
         rows.append(("Findings", _items(shown)))
+    weak = report.get("weak_required", {}).get(inv_id)
+    if weak:
+        rows.append(("Weak checker", '<p class="note">Corrupting these paths was never caught by the self-test.</p>'
+                     + _items([f"<code>{escape(str(path))}</code>" for path in weak])))
     if status in ("out of scope", "never fired"):
         return rows
     examples = report.get("partition_examples", {}).get(inv_id, {})
@@ -194,7 +201,12 @@ def _run_sections(spec: dict, by_req: dict[str, list[str]], report: dict) -> str
     def listed(title: str, items: list[str]) -> str:
         return f'<h3>{escape(title)}</h3>' + (_items(items) if items else '<p class="note">none</p>')
 
+    vanished = (report.get("baseline") or {}).get("vanished", [])
     sections = []
+    if vanished:
+        sections.append('<section class="run-section" id="vanished"><h2>Vanished from the baseline</h2>'
+                        '<p class="note">Scenario / invariant pairs in baseline.jsonl that this run did not record.</p>'
+                        f'{_items([f"<code>{escape(str(k))}</code>" for k in vanished])}</section>')
     if outside:
         sections.append('<section class="run-section" id="outside-spec"><h2>Findings outside the spec</h2>'
                         '<p class="note">Records whose invariant is not in spec.toml or that are not tied to one.</p>'
@@ -257,8 +269,11 @@ def render(spec: dict, raw: bytes, shown_path: str, run: dict | None = None) -> 
     for req_id, req in reqs.items():
         source = req.get("source")
         source_html = escape(" ".join(str(source).split())) if source else _flag("not given")
+        no_inv_note = ("This requirement has no invariants: the run fails coverage."
+                       if report is not None and req_id in report.get("req_without_inv", [])
+                       else "The gate does not check this requirement.")
         invariants = "".join(_invariant(i, invs[i], report) for i in by_req[req_id]) or (
-            f'<p>{_flag("no invariants")} <span class="note">The gate does not check this requirement.</span></p>')
+            f'<p>{_flag("no invariants")} <span class="note">{no_inv_note}</span></p>')
         sections.append(
             f'<section class="req" id="{escape(req_id)}"><div class="req-head">'
             f'<h2 class="mono">{escape(req_id)}</h2><span class="label">Requirement</span></div>'

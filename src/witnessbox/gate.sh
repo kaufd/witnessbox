@@ -24,6 +24,8 @@ summary() {
 fail() {
   error_message="$*"
   echo "$*" >&2
+  # A verdict page written before the error would contradict gate.json (D65).
+  [ -n "${run:-}" ] && rm -f "$run/gate.html" "$run/gate.html.tmp"
   summary 2 gate_error "$*" || rm -f "$run/gate.json"
   exit 2
 }

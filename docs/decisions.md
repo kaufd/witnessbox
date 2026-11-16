@@ -507,3 +507,13 @@ From the talk in D65: a recorded decision can be revisited, and if it is known i
 
 Accepted: a new entry that rests on a measurement, a cost or an external constraint has a line "Revisit if: …" with a checkable condition before the status line. For D29, for example: "auditing one requirement takes under a minute without manual labelling of survivors" or "on a second project the decision level and OBS find the same planted defects". Earlier entries do not change; a condition for an old decision is added by a new entry that refers to it. The rule is stated in the introduction to this log and in the repository `AGENTS.md`. No code changes.
 (2026-11-16, status: accepted.)
+
+### D65 clarification. The verdict page shows every FAIL cause
+The final review of the D65 implementation found that the list of states in D65 is incomplete. The checker fails a run for three more reasons: a weak checker (`weak_required` from the self-test, which the gate always runs), a requirement without invariants, and a "scenario / invariant" pair that vanished from the baseline. The page did not show them and called an invariant with a weak checker "confirmed", so a FAIL page did not show its cause.
+
+Accepted: an invariant with a weak checker has the state "weak checker" (right after a finding) and lists the paths whose corruption was not caught; on the verdict page a requirement without invariants is marked as failing coverage; pairs that vanished from the baseline get their own section. If the gate ends with an error after `gate.html` is written, the page is removed, so it cannot contradict `gate.json`.
+
+Two inaccuracies in D65. The page shows the `data` of records that gave coverage, which `report.md` does not show; no data appears outside the results directory, since the same records are in `evidence.jsonl` next to it, but the phrase "no more than `report.md`" is wrong. And `make example` does not build the page: a test on the example `report.json` checks that the page shows all four planted defects.
+
+Revisit if: GitHub starts displaying HTML from artifacts; then `gate.html` could replace `gate.md` as the main report in CI.
+(2026-11-16, status: accepted; clarifies D65.)

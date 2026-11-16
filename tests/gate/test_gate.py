@@ -379,6 +379,14 @@ class Gate(unittest.TestCase):
         self.assertNotIn("gate.html", self.gate_json()["files"])
         self.assertIn("Verdict page: not built", self.gate_md())
 
+    def test_gate_error_after_the_verdict_page_removes_it(self):
+        """A gate error after gate.html is written must not leave a PASS page next to an ERROR gate.json."""
+        p = self.gate(self.write_to('"$OUT_DIR"') + 'mkdir "$OUT_DIR/../gate.md"\n')
+        self.assertEqual(p.returncode, 2, p.stdout + p.stderr)
+        self.assertEqual(self.gate_json()["result"], "ERROR")
+        self.assertFalse((self.run_dir / "gate.html").exists())
+        self.assertNotIn("gate.html", self.gate_json()["files"])
+
     def test_gate_without_verdict_page_when_report_is_missing(self):
         """A checker that crashes writes no report.json: no verdict page, the verdict stays ERROR (D65)."""
         (self.ebt / "checks.py").write_text("raise SystemExit(3)\n", encoding="utf-8")
