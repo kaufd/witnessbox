@@ -190,7 +190,7 @@ def check_record(n: int, rec: dict, spec: dict, hits: dict[str, set[str]],
     if claim is True and v.ok:
         hits.setdefault(inv_id, set()).update(v.parts)
         if examples is not None:
-            for part in v.parts:
+            for part in sorted(v.parts):  # a set: sorted keeps report.json byte-stable
                 examples.setdefault(inv_id, {}).setdefault(part, {"line": n, "scope": scope, "data": w})
         return None
     if claim is True and not v.ok:

@@ -139,6 +139,16 @@ class Classification(unittest.TestCase):
         self.assertEqual(self.kinds(r), [ec.FALSE_PROOF])
         self.assertEqual(r.partition_examples["INV-CART-3"]["no_discount"]["line"], 2)
 
+    def test_partition_examples_are_in_stable_order(self):
+        # One record proves several partitions; the report must not depend on set order (make example
+        # is compared byte for byte in CI).
+        line = (KIT / "examples" / "basic" / "evidence.jsonl").read_text(encoding="utf-8").splitlines()[10]
+        record = {**json.loads(line), "seq": 1}
+        r = self.report([record])
+        parts = list(r.partition_examples[record["inv"]])
+        self.assertGreater(len(parts), 1)
+        self.assertEqual(parts, sorted(parts))
+
     def test_no_partition_examples_without_proof(self):
         bad = cart([(100, 2)], "none", 0, result=201)
         r = self.report([rec(1, "INV-CART-3", "REQ-CART-1", True, bad)])
