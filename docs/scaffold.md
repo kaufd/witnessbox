@@ -13,6 +13,19 @@ empty directory. The command does not touch an existing non-empty directory: it 
 to write over an approved `spec.toml` and returns code `2`. The templates are part of the wheel and sdist (`witnessbox/resources/scaffold/`);
 the repository sources are not needed after installation.
 
+The scaffold does not touch files outside `<directory>`. The project's agent instructions are
+pointed to the new `AGENTS.md` by a separate command, which also works for an existing `ebt/`:
+
+```bash
+witnessbox link-agents [<directory>]
+```
+
+The project root is the parent of `<directory>` (default `ebt`). An existing `AGENTS.md` gets the line
+`Witnessbox rules for this project: ebt/AGENTS.md`, an existing `CLAUDE.md` gets `@ebt/AGENTS.md`,
+which loads the file itself; if neither exists, `AGENTS.md` is created. A file that already names
+the rules is not changed. Other instruction files (Cursor rules and the like) are linked by hand. Without `<directory>/AGENTS.md` the command
+returns code `2` (D69).
+
 There are four stacks; they differ in `test.sh` and a line of `pinned.txt`:
 
 | Stack | Project | Default `test.sh` | SDK |

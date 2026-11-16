@@ -134,6 +134,60 @@ def _copy_scaffold(sources, target):
         raise
 
 
+# Root agent instruction files and the pointer line each gets; in CLAUDE.md `@path` imports the file.
+AGENT_POINTERS = (("AGENTS.md", "Witnessbox rules for this project: {}"), ("CLAUDE.md", "@{}"))
+
+
+def link_agents(argv):
+    """witnessbox link-agents [<ebt-dir>]: point the root agent instructions to <ebt-dir>/AGENTS.md (D69).
+
+    The project root is the parent of <ebt-dir>. Existing AGENTS.md and CLAUDE.md get a line appended;
+    if there are none, AGENTS.md is created. A file that already names the rules is left as is.
+    """
+    if len(argv) > 1:
+        print("usage: witnessbox link-agents [<ebt-dir>]", file=sys.stderr)
+        return 2
+    # abspath, not resolve: a symlinked ebt/ keeps its place in the project.
+    target = Path(os.path.abspath(Path(argv[0] if argv else "ebt").expanduser()))
+    if not (target / "AGENTS.md").is_file():
+        print(f"witnessbox link-agents: {target}/AGENTS.md not found; create the scaffold first "
+              "(witnessbox scaffold)", file=sys.stderr)
+        return 2
+    try:
+        done = _link_agents(target)
+    except OSError as error:
+        print(f"witnessbox link-agents: {error}; add a pointer to {target.name}/AGENTS.md by hand",
+              file=sys.stderr)
+        return 2
+    for line in done:
+        print(line)
+    return 0
+
+
+def _link_agents(target):
+    """Append the pointer to each root instruction file; returns one line per file."""
+    rules = f"{target.name}/AGENTS.md"
+    root = target.parent
+    present = [(name, line) for name, line in AGENT_POINTERS if (root / name).exists()]
+    done = []
+    for name, line in present or AGENT_POINTERS[:1]:
+        path = root / name
+        if path.is_symlink() and not path.exists():
+            raise OSError(f"{path} is a broken symbolic link")
+        text = path.read_text(encoding="utf-8", errors="replace") if path.exists() else ""
+        # Read again for each file: CLAUDE.md may be a link to the AGENTS.md just written.
+        if rules in text:
+            done.append(f"{name}: already points to {rules}")
+            continue
+        pointer = line.format(rules)
+        if text:
+            pointer = ("\n" if text.endswith("\n") else "\n\n") + pointer
+        with path.open("a", encoding="utf-8") as file:
+            file.write(pointer + "\n")
+        done.append(f"{name}: {'added a pointer' if text else 'created with a pointer'} to {rules}")
+    return done
+
+
 def scaffold(argv):
     """Scaffold of ebt/: spec, checks.py, the chosen stack's test.sh templates and pinned.txt."""
     usage = "usage: witnessbox scaffold <dart|ts|jvm|generic> [<ebt-dir>]"
@@ -189,9 +243,9 @@ def scaffold(argv):
     print("  run the checker tests: witnessbox test-checks ebt;")
     print("  copy the SDK and helpers: witnessbox sync-pinned ebt;")
     print("  write an evidence test (it writes build/ebt/*.jsonl) and, if needed, ebt/prepare.sh;")
+    print("  point the project's agent instructions to ebt/AGENTS.md: witnessbox link-agents ebt;")
     print("  commit the project and check the setup: witnessbox gate --check-only ebt .;")
     print("  run the gate: witnessbox gate ebt . <result dir>.")
-    print("  point the project's agent instructions (AGENTS.md, CLAUDE.md) to ebt/AGENTS.md.")
     print("Details are in the directory README.md.")
     return 0
 
@@ -627,12 +681,13 @@ USAGE = """usage: witnessbox <command> [<arguments>]
   gate --check-only <ebt-dir> <clone>           setup check without running tests
   check --spec <spec.toml> --evidence <jsonl>…  checker (witnessbox check -h)
   scaffold <dart|ts|jvm|generic> [<ebt-dir>]    scaffold of ebt/
+  link-agents [<ebt-dir>]                       point AGENTS.md/CLAUDE.md to ebt/AGENTS.md
   sync-pinned <ebt-dir> [<project-root>]        copies from pinned.txt
   test-checks [<ebt-dir>]                       project checker tests
   spec <spec.toml> <out.html>                   spec review page with its sha256
   --version | --installation"""
 
-COMMANDS = {"scaffold": scaffold, "sync-pinned": sync_pinned, "test-checks": test_checks, "spec": spec}
+COMMANDS = {"scaffold": scaffold, "link-agents": link_agents, "sync-pinned": sync_pinned, "test-checks": test_checks, "spec": spec}
 
 
 def main():

@@ -25,7 +25,7 @@ uv tool update-shell
 
 `uv build` без `--wheel` сначала собирает sdist, а wheel — уже из него. `uv build --wheel` собирает напрямую из рабочего дерева и переиспользует устаревший `build/lib`: в поставку может попасть прежний runtime. Если `build/` уже есть от прошлых сборок, перед такой проверкой его достаточно удалить. Из тега без клона: `uv tool install git+https://github.com/kaufd/witnessbox@v0.9.0`.
 
-Поставка добавляет одну команду `witnessbox` с подкомандами `gate`, `check`, `scaffold`, `sync-pinned`, `test-checks` и `spec`; исходники репозитория после установки не нужны. Собранный wheel можно передать на целевую машину и поставить тем же `uv tool install dist/witnessbox-0.9.0-py3-none-any.whl`. `witnessbox --installation` показывает дистрибутив, версию, пути установки и SHA-256 кода гейта и чекера, а также путь к ресурсам SDK. Для запусков калибровки выполните проектный replay после обновления.
+Поставка добавляет одну команду `witnessbox` с подкомандами `gate`, `check`, `scaffold`, `link-agents`, `sync-pinned`, `test-checks` и `spec`; исходники репозитория после установки не нужны. Собранный wheel можно передать на целевую машину и поставить тем же `uv tool install dist/witnessbox-0.9.0-py3-none-any.whl`. `witnessbox --installation` показывает дистрибутив, версию, пути установки и SHA-256 кода гейта и чекера, а также путь к ресурсам SDK. Для запусков калибровки выполните проектный replay после обновления.
 
 ## Переход со старого дистрибутива
 
@@ -51,7 +51,7 @@ uv tool update-shell
 witnessbox scaffold <dart|ts|jvm|generic> [<каталог>]
 ```
 
-`<каталог>` по умолчанию — `ebt` в текущем каталоге; `.` заполняет текущий пустой каталог. Существующий непустой каталог команда не перезаписывает. Стек выбирает `test.sh` и `pinned.txt`; `generic` запускает команду из `EBT_TEST_CMD`, спецификация и пример чекера общие. Файлы, договор `test.sh`, `pinned.txt` и порядок действий — в [заготовке](scaffold.ru.md). Путь до первого PASS — [быстрый старт](quickstart.ru.md), написание спецификации — [руководство](authoring.ru.md). Шаблонная `spec.toml` — пример, а не утверждённая спецификация: требование утверждает человек (D4).
+`<каталог>` по умолчанию — `ebt` в текущем каталоге; `.` заполняет текущий пустой каталог. Существующий непустой каталог команда не перезаписывает. `witnessbox link-agents [<каталог>]` связывает корневые `AGENTS.md` и `CLAUDE.md` проекта с новым `AGENTS.md` (D69). Стек выбирает `test.sh` и `pinned.txt`; `generic` запускает команду из `EBT_TEST_CMD`, спецификация и пример чекера общие. Файлы, договор `test.sh`, `pinned.txt` и порядок действий — в [заготовке](scaffold.ru.md). Путь до первого PASS — [быстрый старт](quickstart.ru.md), написание спецификации — [руководство](authoring.ru.md). Шаблонная `spec.toml` — пример, а не утверждённая спецификация: требование утверждает человек (D4).
 
 Файлы, закреплённые в `pinned.txt`, копирует в проект команда `witnessbox sync-pinned <каталог ebt>`, запущенная из корня проекта; она разбирает `pinned.txt` так же, как гейт, и не пишет за пределы проекта (D44).
 
@@ -150,7 +150,7 @@ scope и находки, прощённые `known.toml`. Без коррект�
 
 | Поддерживаемый интерфейс | Внутренняя реализация |
 |---|---|
-| подкоманды `witnessbox gate` (включая `--check-only`), `witnessbox check`, `witnessbox scaffold`, `witnessbox sync-pinned`, `witnessbox test-checks`, `witnessbox spec`, `witnessbox --version`, `witnessbox --installation`, их аргументы и коды выхода | организация Python-модулей пакета; внутренние `ebt_verification.checker.*`/`ebt_verification.cli` не реэкспортируются |
+| подкоманды `witnessbox gate` (включая `--check-only`), `witnessbox check`, `witnessbox scaffold`, `witnessbox link-agents`, `witnessbox sync-pinned`, `witnessbox test-checks`, `witnessbox spec`, `witnessbox --version`, `witnessbox --installation`, их аргументы и коды выхода | организация Python-модулей пакета; внутренние `ebt_verification.checker.*`/`ebt_verification.cli` не реэкспортируются |
 | `witnessbox.api`, совместимый `ebt_verification.api` и `from checkers import ...` | функции `checker/engine.py` и `checker/input.py` |
 | формат свидетельств JSONL, `report.json` и `gate.json` | устройство реестра чекеров |
 | договор `test.sh`/`prepare.sh`, `OUT_DIR`, переменные `BASE`, `EBT_INV`, `EBT_TESTS`, `EBT_RUNNER`, `EBT_CHECK` | bash-функции гейта |

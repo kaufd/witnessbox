@@ -611,11 +611,11 @@ class Gate(unittest.TestCase):
     def test_help_lists_commands(self):
         p = self.witnessbox("--help")
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
-        for command in ("gate", "--check-only", "check", "scaffold", "sync-pinned", "test-checks", "spec"):
+        for command in ("gate", "--check-only", "check", "scaffold", "link-agents", "sync-pinned", "test-checks", "spec"):
             self.assertIn(command, p.stdout)
 
     def test_subcommand_help_prints_usage(self):
-        for command in ("gate", "scaffold", "sync-pinned", "test-checks", "spec"):
+        for command in ("gate", "scaffold", "link-agents", "sync-pinned", "test-checks", "spec"):
             for flag in ("-h", "--help"):
                 with self.subTest(command=command, flag=flag):
                     p = self.witnessbox(command, flag)
@@ -821,6 +821,74 @@ class Gate(unittest.TestCase):
                            capture_output=True, text=True, env=env)
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
         self.assertTrue((default / "ebt" / "spec.toml").is_file())
+
+    def test_link_agents(self):
+        """link-agents points the root AGENTS.md/CLAUDE.md to ebt/AGENTS.md; scaffold leaves the root alone."""
+        env = {**os.environ, "PYTHONPATH": ""}
+
+        def run(*args, cwd=None):
+            return subprocess.run([str(self.bin / "witnessbox"), *args], cwd=cwd,
+                                  capture_output=True, text=True, env=env)
+
+        def project(name, ebt="ebt", **files):
+            root = self.clone.parent / name
+            root.mkdir()
+            for file, content in files.items():
+                (root / file.replace("_", ".")).write_text(content, encoding="utf-8")
+            p = run("scaffold", "ts", str(root / ebt))
+            self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+            return root
+
+        def read(path):
+            return path.read_text(encoding="utf-8")
+
+        # scaffold does not touch the root and names the command; with no instructions at the root
+        # link-agents creates AGENTS.md (the default ebt in the current directory), CLAUDE.md is not guessed.
+        bare = project("link-bare", AGENTS_md="# Rules\n")
+        self.assertEqual(read(bare / "AGENTS.md"), "# Rules\n")
+        (bare / "AGENTS.md").unlink()
+        p = run("link-agents", cwd=bare)
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertEqual(read(bare / "AGENTS.md"), "Witnessbox rules for this project: ebt/AGENTS.md\n")
+        self.assertFalse((bare / "CLAUDE.md").exists())
+
+        # Both files exist: each gets its own pointer, the content is kept, the pointer follows the
+        # directory name; a second run changes nothing.
+        both = project("link-both", ebt="verification", AGENTS_md="# Rules", CLAUDE_md="@AGENTS.md\n")
+        for _ in range(2):
+            p = run("link-agents", str(both / "verification"))
+            self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+            self.assertEqual(read(both / "AGENTS.md"),
+                             "# Rules\n\nWitnessbox rules for this project: verification/AGENTS.md\n")
+            self.assertEqual(read(both / "CLAUDE.md"), "@AGENTS.md\n\n@verification/AGENTS.md\n")
+        self.assertIn("AGENTS.md: already points to verification/AGENTS.md", p.stdout)
+
+        # CLAUDE.md linked to AGENTS.md does not get a second line.
+        linked = project("link-symlink", AGENTS_md="# Rules\n")
+        (linked / "CLAUDE.md").symlink_to("AGENTS.md")
+        p = run("link-agents", str(linked / "ebt"))
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertEqual(read(linked / "AGENTS.md"), "# Rules\n\nWitnessbox rules for this project: ebt/AGENTS.md\n")
+        self.assertIn("CLAUDE.md: already points to ebt/AGENTS.md", p.stdout)
+
+        # A broken link is not followed.
+        broken = project("link-broken")
+        (broken / "AGENTS.md").symlink_to("missing.md")
+        p = run("link-agents", str(broken / "ebt"))
+        self.assertEqual(p.returncode, 2, p.stdout + p.stderr)
+        self.assertIn("by hand", p.stderr)
+        self.assertFalse((broken / "missing.md").exists())
+
+        # Without ebt/AGENTS.md there is nothing to point to; extra arguments are a usage error.
+        empty = self.clone.parent / "link-empty"
+        empty.mkdir()
+        p = run("link-agents", str(empty / "ebt"))
+        self.assertEqual(p.returncode, 2, p.stdout + p.stderr)
+        self.assertIn("not found", p.stderr)
+        self.assertFalse((empty / "AGENTS.md").exists())
+        p = run("link-agents", "ebt", "extra", cwd=empty)
+        self.assertEqual(p.returncode, 2, p.stdout + p.stderr)
+        self.assertIn("usage: witnessbox link-agents", p.stderr)
 
     def test_scaffold_accepts_current_directory(self):
         """`.` is the current empty directory for each stack; before, it was removed as a temporary one and failed."""
