@@ -124,6 +124,26 @@ class Classification(unittest.TestCase):
         r = self.report([rec(1, "INV-CART-3", "REQ-CART-1", True, cart([(1, 1)], "none", 0))])
         self.assertEqual(r.findings, [])
 
+    def test_partition_example_from_first_proving_record(self):
+        first, second = cart([(100, 2)], "none", 0), cart([(50, 1)], "none", 0)
+        r = self.report([rec(1, "INV-CART-3", "REQ-CART-1", True, first, scope="a"),
+                         rec(2, "INV-CART-3", "REQ-CART-1", True, second, scope="b")])
+        self.assertEqual(r.partition_examples["INV-CART-3"]["no_discount"],
+                         {"line": 1, "scope": "a", "data": first})
+
+    def test_no_partition_example_from_record_with_finding(self):
+        good = cart([(100, 2)], "none", 0)
+        bad = cart([(100, 2)], "none", 0, result=201)
+        r = self.report([rec(1, "INV-CART-3", "REQ-CART-1", True, bad),
+                         rec(2, "INV-CART-3", "REQ-CART-1", True, good)])
+        self.assertEqual(self.kinds(r), [ec.FALSE_PROOF])
+        self.assertEqual(r.partition_examples["INV-CART-3"]["no_discount"]["line"], 2)
+
+    def test_no_partition_examples_without_proof(self):
+        bad = cart([(100, 2)], "none", 0, result=201)
+        r = self.report([rec(1, "INV-CART-3", "REQ-CART-1", True, bad)])
+        self.assertEqual(r.partition_examples, {})
+
     def test_incomplete_unknown_req_mismatch(self):
         r = self.report([rec(1, "INV-CART-3", "REQ-CART-1", True, {"result": 1}),
                          rec(2, "INV-NOPE", "REQ-CART-1", True, {}),
