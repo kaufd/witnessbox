@@ -23,7 +23,7 @@ ebt-verify (workflow из основной ветки)
 - `actions/setup` ставит witnessbox из PyPI, сверяет SHA-256 wheel и JSON `--installation` с `release.json` выпуска.
 - `actions/verify` перепроверяет свидетельства настоящей командой `witnessbox gate`, подписывает `gate.json` аттестацией GitHub и ставит commit status `witnessbox/gate`: `success` — PASS, `failure` — FAIL, `error` — ERROR или отказ до гейта.
 
-Логика лежит в composite actions [setup](../actions/setup/action.yml) и [verify](../actions/verify/action.yml); их скрипты проверяются локально в [test_verify.py](../tests/actions/test_verify.py). Перед первой стадией нужен выпуск witnessbox с `release.json` в GitHub Release: в примерах ниже используется `0.9.1`.
+Логика лежит в composite actions [setup](../actions/setup/action.yml) и [verify](../actions/verify/action.yml); их скрипты проверяются локально в [test_verify.py](../tests/actions/test_verify.py). Перед первой стадией нужен выпуск witnessbox с `release.json` в GitHub Release: в примерах ниже используется `0.10.0`.
 
 ## Шаблон `.github/workflows/ebt-tests.yml`
 
@@ -54,9 +54,9 @@ jobs:
       - name: Установить witnessbox
         # SHA коммита WitnessBox с actions/setup и actions/verify (D45).
         # Полный SHA коммита тега выпуска; не используйте main или имя тега.
-        uses: kaufd/witnessbox/actions/setup@d1b3369b68628db05519963250c7cbaf17360e8b # v0.9.1
+        uses: kaufd/witnessbox/actions/setup@206852488d327a29c4ebd05af0ed6d44499fa363 # v0.10.0
         with:
-          version: "0.9.1"
+          version: "0.10.0"
 
       - name: Запустить гейт
         env:
@@ -104,19 +104,19 @@ jobs:
       attestations: write
     steps:
       - name: Установить witnessbox
-        uses: kaufd/witnessbox/actions/setup@d1b3369b68628db05519963250c7cbaf17360e8b # v0.9.1
+        uses: kaufd/witnessbox/actions/setup@206852488d327a29c4ebd05af0ed6d44499fa363 # v0.10.0
         with:
-          version: "0.9.1"
+          version: "0.10.0"
 
       - name: Перепроверить и подписать
         # Если setup упал, verify всё равно должен поставить status error.
         if: always()
-        uses: kaufd/witnessbox/actions/verify@d1b3369b68628db05519963250c7cbaf17360e8b # v0.9.1
+        uses: kaufd/witnessbox/actions/verify@206852488d327a29c4ebd05af0ed6d44499fa363 # v0.10.0
         with:
           github-token: ${{ github.token }}
 ```
 
-Оба workflow должны быть влиты в основную ветку. `workflow_run` срабатывает только для workflow-файла из основной ветки; PR, меняющий `ebt-verify.yml`, не влияет на проверку этого PR. В примерах закреплён полный 40-символьный SHA коммита тега `v0.9.1`, а не `main` и не имя тега: тег можно переставить, коммит — нет.
+Оба workflow должны быть влиты в основную ветку. `workflow_run` срабатывает только для workflow-файла из основной ветки; PR, меняющий `ebt-verify.yml`, не влияет на проверку этого PR. В примерах закреплён полный 40-символьный SHA коммита тега `v0.10.0`, а не `main` и не имя тега: тег можно переставить, коммит — нет.
 
 `actions/verify` требует, чтобы `actions/setup` уже выполнился в этом job: composite action не вызывает setup сам, иначе пришлось бы ссылаться на SHA того же коммита изнутри него. Если `witnessbox` нет на `PATH`, `actions/verify` ставит `error`, а не молчит.
 
