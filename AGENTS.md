@@ -14,7 +14,7 @@ These rules are for every coding agent that changes this repository (Claude Code
 
 In a connected project a human approves the EBT specification. An agent does not change the project's `spec.toml` without human approval of the requirement (decision D4). Do not introduce a new Runner API, UI or runtime dependencies without a separate decision.
 
-Decisions are append-only: when something changes, add an entry with the reason and the status; do not rewrite earlier entries. The current list and the decision log are in [docs/decisions.md](docs/decisions.md) and [docs/decisions.ru.md](docs/decisions.ru.md).
+Decisions are append-only: when something changes, add an entry with the reason and the status; do not rewrite earlier entries. An entry that rests on a measurement, a cost or an external constraint gets a "Revisit if: …" line with a checkable condition before the status (D68). The current list and the decision log are in [docs/decisions.md](docs/decisions.md) and [docs/decisions.ru.md](docs/decisions.ru.md).
 
 ## Changes and verification
 
