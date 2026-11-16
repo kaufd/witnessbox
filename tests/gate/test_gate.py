@@ -761,6 +761,10 @@ class Gate(unittest.TestCase):
                 # does not see the witnessbox package.
                 for name in ("test_checks.py", "README.md", "AGENTS.md"):
                     self.assertIn("witnessbox test-checks", (target / name).read_text(encoding="utf-8"))
+                # The agent rules ask for evidence in a pull request (D66) and a second-path search (D67).
+                rules = (target / "AGENTS.md").read_text(encoding="utf-8")
+                for text in ("## Evidence", "Not verified", "second path without evidence"):
+                    self.assertIn(text, rules)
                 p = subprocess.run([str(self.bin / "witnessbox"), "test-checks", target.name],
                                    cwd=target.parent, capture_output=True, text=True,
                                    env={**env, "PATH": f"{self.bin}:{os.environ['PATH']}"})

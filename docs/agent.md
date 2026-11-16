@@ -149,7 +149,7 @@ The results directory is outside the clone. Codes: `0` PASS, `1` FAIL, `2` ERROR
 | ERROR, `no evidence` | the test did not write the file to the right directory, or `test.sh` did not find the tests: check the path and the filter |
 | ERROR, `gate_error` of another kind | read `message`, `prepare.log`, `test.log`; most often a dirty clone or missing dependencies |
 | FAIL, `checker_failed`, "partitions not encountered" | the tests did not reach a class: add a scenario; do not remove classes from `partitions` |
-| FAIL, `checker_failed`, a violation or a false proof | a possible code defect or a spec error: **stop**, show the finding to the human |
+| FAIL, `checker_failed`, a violation or a false proof | a possible code defect or a spec error: **stop**, show the finding to the human; if the human confirms a code defect, look for a second path — other places that make the same decision without `ev()` or `-OBS` (D67) |
 | FAIL, `tests_failed` | the tests themselves failed, see `test.log` |
 | FAIL, `pinned_drift` | the SDK copy differs: `witnessbox sync-pinned ebt`, commit |
 | FAIL, `protected_paths_changed` | `ebt/` changed after `BASE`: check which commit was passed as `BASE` |
@@ -180,6 +180,7 @@ Agent rules: ebt/AGENTS.md, linked from <file>
 Gate on sound code: PASS (code 0), classes: <all from partitions>
 Gate on the defect <which>: FAIL, reasons=[...]
 Found in project code: <violations or "none">
+Second path: <places without ev() and -OBS, or "none">
 Not covered: <decisions without evidence, requirements without OBS, what stayed outside the check>
 Next: CI — docs/ci.md (the two-stage gate for GitHub Actions)
 ```
