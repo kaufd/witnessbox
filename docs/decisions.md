@@ -16,7 +16,7 @@ The current documents describe the supported interface and the structure of the 
 - `test.sh` is the preferred launch contract for new projects; the historical Flutter fallback is kept for compatibility.
 - A new project gets the `ebt/` scaffold with `witnessbox scaffold` for `dart`, `ts`, `jvm` or `generic` (D31, D48), and the copies pinned in `pinned.txt` with `witnessbox sync-pinned` (D44). The checker tests and the integration check are run by `witnessbox test-checks` and `witnessbox gate --check-only` (D47, D51). The template spec is not an approved spec.
 - No new Runner API, UI or runtime dependencies are added without a separate decision.
-- Accepted and not yet implemented: the verdict page `gate.html` (D65), the evidence section in the pull request description (D66) and the search for a second path after a confirmed defect (D67) in the scaffold agent rules.
+- Implemented, ship with the next release: the gate writes the verdict page `gate.html`, the spec page with the run result laid over it (D65); the scaffold agent rules ask for an `## Evidence` section in a pull request (D66) and a second-path search after a confirmed defect (D67). Both fingerprints change.
 
 The discussion history, concepts, roadmap and evidence levels are kept outside the public repository and contain the original context. These documents reflect a historical state and are not a promise of future implementation.
 
